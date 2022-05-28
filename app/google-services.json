@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1063249403509",
+    "project_id": "face-recognition-databas-76e1e",
+    "storage_bucket": "face-recognition-databas-76e1e.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1063249403509:android:3e29371c7528c06915a23c",
+        "android_client_info": {
+          "package_name": "com.example.engage2022_face_recog"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1063249403509-eqgecnffntv4le7nmah9dtgolrrii7m3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBLK4T-1bZvbtfhabmyc05TtPry1mocjTA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1063249403509-eqgecnffntv4le7nmah9dtgolrrii7m3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
