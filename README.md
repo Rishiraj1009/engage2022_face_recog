@@ -8,4 +8,4 @@ Features :
 Compatibility : Compatible with android 8+ devices
 Imp note :
 Data is moderated, admin has to verify to add new data
-
+excel sheet link:https://docs.google.com/spreadsheets/d/1MPU39ZefbUAoYX-k_ethP-0CKpqaFRETiOHwdooFo_0/edit?usp=sharing
