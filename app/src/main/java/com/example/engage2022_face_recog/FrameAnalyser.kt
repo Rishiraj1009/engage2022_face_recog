@@ -6,10 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.util.Log
-import android.widget.Toast
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
-import androidx.core.content.ContextCompat.startActivity
 import com.example.engage2022_face_recog.model.FaceNetModel
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
@@ -97,7 +95,7 @@ class FrameAnalyser( private var context: Context ,
 
     private suspend fun runModel( faces : List<Face> , cameraFrameBitmap : Bitmap ){
         val i = Intent(context, DetailActivity::class.java)
-        i.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        i.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_NEW_TASK)
         withContext( Dispatchers.Default ) {
             val predictions = ArrayList<Prediction>()
             for (face in faces) {

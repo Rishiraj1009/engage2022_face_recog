@@ -3,19 +3,20 @@ package com.example.engage2022_face_recog
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.HandlerThread
-import android.util.DisplayMetrics
 import android.util.Log
 import android.util.Size
 import android.view.View
-import android.view.View.VISIBLE
 import android.view.WindowInsets
 import android.view.animation.TranslateAnimation
+import android.widget.ImageView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -56,6 +57,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var cameraProviderFuture : ListenableFuture<ProcessCameraProvider>
     private lateinit var sharedPreferences: SharedPreferences
     private lateinit var splashscreen: CardView
+    private lateinit var list: ImageView
+    private lateinit var form: ImageView
 
     // <----------------------- User controls --------------------------->
 
@@ -75,18 +78,35 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        var k = 0
-        // Remove the status bar to have a full screen experience
-        // See this answer on SO -> https://stackoverflow.com/a/68152688/10878733
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.decorView.windowInsetsController!!
-                .hide( WindowInsets.Type.statusBars() or WindowInsets.Type.navigationBars())
-        }
-        else {
-            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN
-
-        }
         setContentView(R.layout.activity_main)
+
+        list = findViewById(R.id.list)
+        form = findViewById(R.id.form)
+
+        list.setOnClickListener {
+            val i = Intent(this, ListActivity::class.java)
+            i.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            startActivity(i)
+        }
+
+        form.setOnClickListener {
+            val formDialog = AlertDialog.Builder( this ).apply {
+                setTitle( "Report")
+                setMessage( "Would you like to report details of a missing person?" )
+                setCancelable( true )
+                setPositiveButton( "Yes") { dialog, _ ->
+                    dialog.dismiss()
+                    val url = "https://docs.google.com/forms/d/e/1FAIpQLSfQCo9ogrRUbyarJHrSphkNNyqv8OJPg2AxjSra-PRUeFFhlQ/viewform?usp=sf_link"
+                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    startActivity(browserIntent)
+                }
+                setNegativeButton( "No") { dialog, _ ->
+                    dialog.dismiss()
+                }
+                create()
+            }
+            formDialog.show()
+        }
 
         splashscreen = findViewById(R.id.splashscreen)
 
@@ -122,24 +142,24 @@ class MainActivity : AppCompatActivity() {
                 setTitle( "Serialized Data")
                 setMessage( "Existing trained data was found on the device. Would you like to load it or would you like to reload it from the server (data charges may apply)?" )
                 setCancelable( false )
-                setNegativeButton( "LOAD") { dialog, which ->
+                setNegativeButton( "LOAD") { dialog, _ ->
                     dialog.dismiss()
                     Executors.newSingleThreadScheduledExecutor().schedule({
                         val animate = TranslateAnimation(0F,
                             -2000.0f, 0F, 0F)
                         animate.duration = 500
                         animate.fillAfter = true
-                        splashscreen.startAnimation(animate) }, 2, TimeUnit.SECONDS)
+                        splashscreen.startAnimation(animate) }, 1, TimeUnit.SECONDS)
                     frameAnalyser.faceList = loadSerializedImageData()
                 }
-                setPositiveButton( "RELOAD") { dialog, which ->
+                setPositiveButton( "RELOAD") { dialog, _ ->
                     dialog.dismiss()
                     Executors.newSingleThreadScheduledExecutor().schedule({
                         val animate = TranslateAnimation(0F,
                             -2000.0f, 0F, 0F)
                         animate.duration = 500
                         animate.fillAfter = true
-                        splashscreen.startAnimation(animate) }, 2, TimeUnit.SECONDS)
+                        splashscreen.startAnimation(animate) }, 1, TimeUnit.SECONDS)
                     showSelectDirectoryDialog()
                 }
                 create()
@@ -191,11 +211,11 @@ class MainActivity : AppCompatActivity() {
                 setTitle( "Camera Permission")
                 setMessage( "The app couldn't function without the camera permission." )
                 setCancelable( false )
-                setPositiveButton( "ALLOW" ) { dialog, which ->
+                setPositiveButton( "ALLOW" ) { dialog, _ ->
                     dialog.dismiss()
                     requestCameraPermission()
                 }
-                setNegativeButton( "CLOSE" ) { dialog, which ->
+                setNegativeButton( "CLOSE" ) { dialog, _ ->
                     dialog.dismiss()
                     finish()
                 }
