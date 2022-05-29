@@ -5,8 +5,6 @@ import ModelInfo
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
-import com.example.engage2022_face_recog.Logger
-import com.example.engage2022_face_recog.model.*
 import org.tensorflow.lite.DataType
 import org.tensorflow.lite.Interpreter
 import org.tensorflow.lite.gpu.CompatibilityList
@@ -59,7 +57,6 @@ class FaceNetModel(context : Context,
             setUseNNAPI(true)
         }
         interpreter = Interpreter(FileUtil.loadMappedFile(context, model.assetsFilename ) , interpreterOptions )
-        Logger.log("Using ${model.name} model.")
     }
 
 

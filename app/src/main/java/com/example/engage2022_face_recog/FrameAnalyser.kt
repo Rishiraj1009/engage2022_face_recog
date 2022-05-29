@@ -3,12 +3,14 @@ package com.example.engage2022_face_recog
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.util.Log
+import android.widget.Toast
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
+import androidx.core.content.ContextCompat.startActivity
 import com.example.engage2022_face_recog.model.FaceNetModel
-
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.face.FaceDetection
@@ -79,7 +81,7 @@ class FrameAnalyser( private var context: Context ,
                 boundingBoxOverlay.frameWidth = frameBitmap.width
             }
 
-            val inputImage = InputImage.fromMediaImage( image.image , image.imageInfo.rotationDegrees )
+            val inputImage = InputImage.fromMediaImage(image.image!!, image.imageInfo.rotationDegrees )
             detector.process(inputImage)
                 .addOnSuccessListener { faces ->
                     CoroutineScope( Dispatchers.Default ).launch {
@@ -94,6 +96,8 @@ class FrameAnalyser( private var context: Context ,
 
 
     private suspend fun runModel( faces : List<Face> , cameraFrameBitmap : Bitmap ){
+        val i = Intent(context, DetailActivity::class.java)
+        i.flags = Intent.FLAG_ACTIVITY_NEW_TASK
         withContext( Dispatchers.Default ) {
             val predictions = ArrayList<Prediction>()
             for (face in faces) {
@@ -143,7 +147,6 @@ class FrameAnalyser( private var context: Context ,
                     // Compute the average of all scores norms for each cluster.
                     val avgScores =
                         nameScoreHashmap.values.map { scores -> scores.toFloatArray().average() }
-                    Logger.log("Average score for each user : $nameScoreHashmap")
 
                     val names = nameScoreHashmap.keys.toTypedArray()
                     nameScoreHashmap.clear()
@@ -164,13 +167,16 @@ class FrameAnalyser( private var context: Context ,
                             names[avgScores.indexOf(avgScores.minOrNull()!!)]
                         }
                     }
-                    Logger.log("Person identified as $bestScoreUserName")
                     predictions.add(
                         Prediction(
                             face.boundingBox,
                             bestScoreUserName
                         )
                     )
+                    if(bestScoreUserName!="Unknown") {
+                        i.putExtra("name", bestScoreUserName)
+                        context.startActivity(i)
+                    }
                 }
                 catch ( e : Exception ) {
                     // If any exception occurs with this box and continue with the next boxes.

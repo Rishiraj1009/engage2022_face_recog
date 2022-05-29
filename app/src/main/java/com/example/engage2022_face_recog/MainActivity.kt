@@ -3,20 +3,19 @@ package com.example.engage2022_face_recog
 
 import android.Manifest
 import android.content.Context
-import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.media.ExifInterface
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.DocumentsContract
-import android.text.method.ScrollingMovementMethod
+import android.os.HandlerThread
+import android.util.DisplayMetrics
+import android.util.Log
 import android.util.Size
 import android.view.View
+import android.view.View.VISIBLE
 import android.view.WindowInsets
-import android.widget.TextView
+import android.view.animation.TranslateAnimation
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -25,16 +24,19 @@ import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.cardview.widget.CardView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.LifecycleOwner
 import com.example.engage2022_face_recog.model.FaceNetModel
 import com.example.engage2022_face_recog.model.Models
 import com.google.common.util.concurrent.ListenableFuture
-
+import com.google.firebase.database.*
+import com.squareup.picasso.Picasso
 import java.io.*
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 
 class MainActivity : AppCompatActivity() {
@@ -53,6 +55,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var fileReader : FileReader
     private lateinit var cameraProviderFuture : ListenableFuture<ProcessCameraProvider>
     private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var splashscreen: CardView
 
     // <----------------------- User controls --------------------------->
 
@@ -64,27 +67,15 @@ class MainActivity : AppCompatActivity() {
     // Refer https://blog.tensorflow.org/2020/07/accelerating-tensorflow-lite-xnnpack-integration.html
     private val useXNNPack = true
 
-    // You may the change the models here.
     // Use the model configs in Models.kt
-    // Default is Models.FACENET ; Quantized models are faster
     private val modelInfo = Models.FACENET
 
     // <---------------------------------------------------------------->
 
 
-    companion object {
-
-        lateinit var logTextView : TextView
-
-        fun setMessage( message : String ) {
-            logTextView.text = message
-        }
-
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
+        var k = 0
         // Remove the status bar to have a full screen experience
         // See this answer on SO -> https://stackoverflow.com/a/68152688/10878733
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -97,11 +88,10 @@ class MainActivity : AppCompatActivity() {
         }
         setContentView(R.layout.activity_main)
 
-        // Implementation of CameraX preview
+        splashscreen = findViewById(R.id.splashscreen)
 
+        // Implementation of CameraX preview
         previewView = findViewById( R.id.preview_view )
-        logTextView = findViewById( R.id.log_textview )
-        logTextView.movementMethod = ScrollingMovementMethod()
         // Necessary to keep the Overlay above the PreviewView so that the boxes are visible.
         val boundingBoxOverlay = findViewById<BoundingBoxOverlay>( R.id.bbox_overlay )
         boundingBoxOverlay.setWillNotDraw( false )
@@ -125,22 +115,32 @@ class MainActivity : AppCompatActivity() {
         sharedPreferences = getSharedPreferences( getString( R.string.app_name ) , Context.MODE_PRIVATE )
         isSerializedDataStored = sharedPreferences.getBoolean( SHARED_PREF_IS_DATA_STORED_KEY , false )
         if ( !isSerializedDataStored ) {
-            Logger.log( "No serialized data was found. Select the images directory.")
             showSelectDirectoryDialog()
         }
         else {
             val alertDialog = AlertDialog.Builder( this ).apply {
                 setTitle( "Serialized Data")
-                setMessage( "Existing image data was found on this device. Would you like to load it?" )
+                setMessage( "Existing trained data was found on the device. Would you like to load it or would you like to reload it from the server (data charges may apply)?" )
                 setCancelable( false )
                 setNegativeButton( "LOAD") { dialog, which ->
                     dialog.dismiss()
+                    Executors.newSingleThreadScheduledExecutor().schedule({
+                        val animate = TranslateAnimation(0F,
+                            -2000.0f, 0F, 0F)
+                        animate.duration = 500
+                        animate.fillAfter = true
+                        splashscreen.startAnimation(animate) }, 2, TimeUnit.SECONDS)
                     frameAnalyser.faceList = loadSerializedImageData()
-                    Logger.log( "Serialized data loaded.")
                 }
-                setPositiveButton( "RESCAN") { dialog, which ->
+                setPositiveButton( "RELOAD") { dialog, which ->
                     dialog.dismiss()
-                    launchChooseDirectoryIntent()
+                    Executors.newSingleThreadScheduledExecutor().schedule({
+                        val animate = TranslateAnimation(0F,
+                            -2000.0f, 0F, 0F)
+                        animate.duration = 500
+                        animate.fillAfter = true
+                        splashscreen.startAnimation(animate) }, 2, TimeUnit.SECONDS)
+                    showSelectDirectoryDialog()
                 }
                 create()
             }
@@ -209,123 +209,59 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------------------------------------- //
 
-
+    private lateinit var dbReference: DatabaseReference
     // Open File chooser to choose the images directory.
     private fun showSelectDirectoryDialog() {
-        val alertDialog = AlertDialog.Builder( this ).apply {
-            setTitle( "Select Images Directory")
-            setMessage( "As mentioned in the project\'s README file, please select a directory which contains the images." )
-            setCancelable( false )
-            setPositiveButton( "SELECT") { dialog, which ->
-                dialog.dismiss()
-                launchChooseDirectoryIntent()
-            }
-            create()
-        }
-        alertDialog.show()
-    }
-
-
-    private fun launchChooseDirectoryIntent() {
-        val intent = Intent( Intent.ACTION_OPEN_DOCUMENT_TREE )
-        // startForActivityResult is deprecated.
-        // See this SO thread -> https://stackoverflow.com/questions/62671106/onactivityresult-method-is-deprecated-what-is-the-alternative
-        directoryAccessLauncher.launch( intent )
-    }
-
-
-    // Read the contents of the select directory here.
-    // The system handles the request code here as well.
-    // See this SO question -> https://stackoverflow.com/questions/47941357/how-to-access-files-in-a-directory-given-a-content-uri
-    private val directoryAccessLauncher = registerForActivityResult( ActivityResultContracts.StartActivityForResult() ) {
-        val dirUri = it.data?.data ?: return@registerForActivityResult
-        val childrenUri =
-            DocumentsContract.buildChildDocumentsUriUsingTree(
-                dirUri,
-                DocumentsContract.getTreeDocumentId( dirUri )
-            )
-        val tree = DocumentFile.fromTreeUri(this, childrenUri)
-        val images = ArrayList<Pair<String,Bitmap>>()
-        var errorFound = false
-        if ( tree!!.listFiles().isNotEmpty()) {
-            for ( doc in tree.listFiles() ) {
-                if ( doc.isDirectory && !errorFound ) {
-                    val name = doc.name!!
-                    for ( imageDocFile in doc.listFiles() ) {
-                        try {
-                            images.add( Pair( name , getFixedBitmap( imageDocFile.uri ) ) )
-                        }
-                        catch ( e : Exception ) {
-                            errorFound = true
-                            Logger.log( "Could not parse an image in $name directory. Make sure that the file structure is " +
-                                    "as described in the README of the project and then restart the app." )
-                            break
+        val images: MutableList<Pair<String,Bitmap>> = ArrayList()
+        dbReference = FirebaseDatabase.getInstance().getReference("1MPU39ZefbUAoYX-k_ethP-0CKpqaFRETiOHwdooFo_0/missing")
+        val missingPersonList: MutableList<MissingInfo?> = ArrayList()
+        dbReference.addValueEventListener(object : ValueEventListener {
+            override fun onDataChange(dataSnapshot: DataSnapshot) {
+                for (noteSnapshot in dataSnapshot.children) {
+                    val note: MissingInfo? = noteSnapshot.getValue(MissingInfo::class.java)
+                    missingPersonList.add(note)
+                    if (note != null) {
+                        val urls = note.images!!.split(",")
+                        for(url in urls) {
+                            images.add(Pair(note.name.toString(), getBitmap(url)))
                         }
                     }
-                    Logger.log( "Found ${doc.listFiles().size} images in $name directory" )
                 }
-                else {
-                    errorFound = true
-                    Logger.log( "The selected folder should contain only directories. Make sure that the file structure is " +
-                            "as described in the README of the project and then restart the app." )
-                }
+                fileReader.run(images as ArrayList<Pair<String, Bitmap>>, fileReaderCallback)
             }
-        }
-        else {
-            errorFound = true
-            Logger.log( "The selected folder doesn't contain any directories. Make sure that the file structure is " +
-                    "as described in the README of the project and then restart the app." )
-        }
-        if ( !errorFound ) {
-            fileReader.run( images , fileReaderCallback )
-            Logger.log( "Detecting faces in ${images.size} images ..." )
-        }
-        else {
-            val alertDialog = AlertDialog.Builder( this ).apply {
-                setTitle( "Error while parsing directory")
-                setMessage( "There were some errors while parsing the directory. Please see the log below. Make sure that the file structure is " +
-                        "as described in the README of the project and then tap RESELECT" )
-                setCancelable( false )
-                setPositiveButton( "RESELECT") { dialog, which ->
-                    dialog.dismiss()
-                    launchChooseDirectoryIntent()
-                }
-                setNegativeButton( "CANCEL" ){ dialog , which ->
-                    dialog.dismiss()
-                    finish()
-                }
-                create()
+
+            override fun onCancelled(databaseError: DatabaseError) {
+                Log.d("LOG", databaseError.message)
             }
-            alertDialog.show()
-        }
+        })
     }
 
+    private fun getBitmap(imageFileUri: String): Bitmap {
+        val latch = CountDownLatch(1)
 
-    // Get the image as a Bitmap from given Uri and fix the rotation using the Exif interface
-    // Source -> https://stackoverflow.com/questions/14066038/why-does-an-image-captured-using-camera-intent-gets-rotated-on-some-devices-on-a
-    private fun getFixedBitmap( imageFileUri : Uri ) : Bitmap {
-        var imageBitmap = BitmapUtils.getBitmapFromUri( contentResolver , imageFileUri )
-        val exifInterface = ExifInterface( contentResolver.openInputStream( imageFileUri )!! )
-        imageBitmap =
-            when (exifInterface.getAttributeInt( ExifInterface.TAG_ORIENTATION ,
-                ExifInterface.ORIENTATION_UNDEFINED )) {
-                ExifInterface.ORIENTATION_ROTATE_90 -> BitmapUtils.rotateBitmap( imageBitmap , 90f )
-                ExifInterface.ORIENTATION_ROTATE_180 -> BitmapUtils.rotateBitmap( imageBitmap , 180f )
-                ExifInterface.ORIENTATION_ROTATE_270 -> BitmapUtils.rotateBitmap( imageBitmap , 270f )
-                else -> imageBitmap
+        var value : Bitmap? = null
+            val uiThread: Thread = object : HandlerThread("UIHandler") {
+                override fun run() {
+                    try {
+                        value = Picasso.get().load(imageFileUri).get()
+                    } catch (e: Exception) {
+                        Log.d("Tag", imageFileUri + "")
+                        return
+                    }
+                    latch.countDown() // Release await() in the test thread.
+                }
             }
-        return imageBitmap
+            uiThread.start()
+            latch.await()
+        return value!!
     }
-
 
     // ---------------------------------------------- //
-
 
     private val fileReaderCallback = object : FileReader.ProcessCallback {
         override fun onProcessCompleted(data: ArrayList<Pair<String, FloatArray>>, numImagesWithNoFaces: Int) {
             frameAnalyser.faceList = data
             saveSerializedImageData( data )
-            Logger.log( "Images parsed. Found $numImagesWithNoFaces images with no faces." )
         }
     }
 
